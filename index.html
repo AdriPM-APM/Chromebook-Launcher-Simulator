@@ -1,0 +1,1975 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChromeOS Flex Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Prevent scrolling on the main body */
+        }
+
+        .desktop-bg {
+            background-image: url('https://placehold.co/1920x1080/000000/FFFFFF?text=ChromeOS+Flex+Background'); /* Placeholder background */
+            background-size: cover;
+            background-position: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+        }
+
+        .app-window {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            min-width: 300px;
+            min-height: 200px;
+            max-width: 90vw;
+            max-height: 80vh;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            resize: both; /* Allow resizing */
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        .app-window.active {
+            opacity: 1;
+            pointer-events: auto;
+            z-index: 101; /* Bring active window to front */
+        }
+
+        .app-window-header {
+            cursor: grab;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #e0e0e0;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+        }
+
+        .app-window-body {
+            flex-grow: 1;
+            overflow: auto;
+            padding: 16px;
+        }
+
+        .shelf {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 8px 16px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+            box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.1);
+            z-index: 50;
+        }
+
+        .app-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+            user-select: none;
+        }
+
+        .app-icon:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        .app-icon i {
+            font-size: 2.5rem;
+            color: #333;
+        }
+
+        .app-icon img {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+        }
+
+        .app-icon span {
+            font-size: 0.75rem;
+            margin-top: 4px;
+            color: #555;
+            text-align: center;
+        }
+
+        .app-launcher {
+            position: fixed;
+            bottom: 80px; /* Above the shelf */
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 15px;
+            max-width: 80vw;
+            max-height: 70vh;
+            overflow-y: auto;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+            z-index: 60;
+        }
+
+        .app-launcher.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .app-launcher .app-icon {
+            width: 80px;
+            height: 80px;
+        }
+
+        .app-launcher .app-icon i {
+            font-size: 3rem;
+        }
+
+        .app-launcher .app-icon span {
+            font-size: 0.85rem;
+        }
+
+        /* Specific app styling */
+        #chrome-browser iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 8px;
+        }
+
+        #camera-app video {
+            width: 100%;
+            height: auto;
+            max-height: 100%;
+            background-color: black;
+            border-radius: 8px;
+        }
+
+        #notes-app textarea {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 1rem;
+            resize: none;
+            outline: none;
+        }
+
+        #files-app ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        #files-app li {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        #files-app li i {
+            margin-right: 10px;
+            color: #666;
+        }
+
+        #gallery-app .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            max-height: 100%;
+            overflow-y: auto;
+        }
+
+        #gallery-app img {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out;
+        }
+
+        #gallery-app img:hover {
+            transform: scale(1.05);
+        }
+
+        #annotation-app canvas {
+            background-color: rgba(255, 255, 255, 0.5); /* Semi-transparent background */
+            border-radius: 8px;
+            cursor: crosshair;
+        }
+
+        .annotation-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1000; /* Above everything else */
+            pointer-events: none; /* Allow clicks to pass through by default */
+        }
+
+        .annotation-overlay.active {
+            pointer-events: auto; /* Enable interaction when active */
+        }
+
+        .annotation-tools {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            z-index: 1001;
+        }
+
+        .annotation-tools button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .annotation-tools button:hover {
+            background-color: #45a049;
+        }
+
+        .annotation-tools input[type="color"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 30px;
+            height: 30px;
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+
+        .annotation-tools input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+
+        .annotation-tools input[type="color"]::-webkit-color-swatch {
+            border: none;
+            border-radius: 50%;
+        }
+
+        .annotation-tools input[type="color"]::-moz-color-swatch-wrapper {
+            padding: 0;
+        }
+
+        .annotation-tools input[type="color"]::-moz-color-swatch {
+            border: none;
+            border-radius: 50%;
+        }
+
+        .annotation-tools input[type="range"] {
+            width: 80px;
+            -webkit-appearance: none;
+            height: 8px;
+            background: #ddd;
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+
+        .annotation-tools input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+        }
+
+        .annotation-tools input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        .modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: auto;
+        }
+
+        /* Lock Screen Styling */
+        #lock-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-image: url('https://placehold.co/1920x1080/000000/FFFFFF?text=Locked+Screen+Background'); /* Placeholder background */
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20000; /* Ensure it's on top of everything */
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        #lock-screen.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #lock-screen .lock-content {
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 40px;
+            border-radius: 16px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        #lock-screen input {
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 8px;
+            padding: 12px 20px;
+            color: white;
+            font-size: 1.25rem;
+            text-align: center;
+            outline: none;
+            margin-top: 20px;
+            width: 200px;
+        }
+
+        #lock-screen input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        #lock-screen button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 20px;
+        }
+
+        #lock-screen button:hover {
+            background-color: #45a049;
+        }
+
+        #lock-screen .error-message {
+            color: #FF6347; /* Tomato red */
+            margin-top: 10px;
+            font-weight: 500;
+        }
+
+        /* Calculator specific styles */
+        .calculator-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            max-width: 320px;
+            margin: 0 auto;
+            padding: 16px;
+            background-color: #f0f0f0;
+            border-radius: 12px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        .calculator-display {
+            grid-column: span 4;
+            background-color: #333;
+            color: white;
+            font-size: 2.5rem;
+            padding: 16px;
+            text-align: right;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .calculator-button {
+            background-color: #e0e0e0;
+            border: none;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .calculator-button:hover {
+            background-color: #d0d0d0;
+        }
+
+        .calculator-button.operator {
+            background-color: #f9a825; /* Orange */
+            color: white;
+        }
+
+        .calculator-button.operator:hover {
+            background-color: #e69500;
+        }
+
+        .calculator-button.equals {
+            background-color: #4CAF50; /* Green */
+            color: white;
+        }
+
+        .calculator-button.equals:hover {
+            background-color: #45a049;
+        }
+
+        .calculator-button.clear {
+            background-color: #ef5350; /* Red */
+            color: white;
+        }
+
+        .calculator-button.clear:hover {
+            background-color: #d32f2f;
+        }
+
+        /* Calendar specific styles */
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .calendar-grid-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            text-align: center;
+            font-weight: 500;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .calendar-grid-dates {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            text-align: center;
+        }
+
+        .calendar-date {
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #f8f8f8;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .calendar-date:hover {
+            background-color: #e0e0e0;
+        }
+
+        .calendar-date.current-month {
+            color: #333;
+        }
+
+        .calendar-date.other-month {
+            color: #ccc;
+        }
+
+        .calendar-date.today {
+            background-color: #2196F3; /* Blue */
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 2px 5px rgba(33, 150, 243, 0.3);
+        }
+
+        /* Settings specific styles */
+        .settings-section {
+            background-color: #f8f8f8;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        }
+
+        .settings-section h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .settings-item {
+            margin-bottom: 15px;
+        }
+
+        .settings-item label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .settings-item input[type="file"] {
+            display: none; /* Hide default file input */
+        }
+
+        .settings-item .custom-file-upload {
+            display: inline-block;
+            background-color: #2196F3;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .settings-item .custom-file-upload:hover {
+            background-color: #1976D2;
+        }
+
+        .settings-item .file-name {
+            margin-left: 10px;
+            font-size: 0.9rem;
+            color: #777;
+        }
+
+        .settings-item input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-top: 5px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .settings-item input[type="password"]:focus {
+            border-color: #2196F3;
+        }
+
+        .settings-item button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 10px;
+        }
+
+        .settings-item button:hover {
+            background-color: #45a049;
+        }
+
+        .settings-item .message {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .settings-item .message.success {
+            color: #4CAF50;
+        }
+
+        .settings-item .message.error {
+            color: #ef5350;
+        }
+
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col h-screen">
+
+    <div class="desktop-bg"></div>
+
+    <div id="app-windows-container" class="flex-grow">
+
+        <template id="app-window-template">
+            <div class="app-window hidden" data-app-id="">
+                <div class="app-window-header">
+                    <span class="app-window-title font-semibold text-gray-700"></span>
+                    <div class="flex gap-2">
+                        <button class="window-minimize-btn text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <button class="window-maximize-btn text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-square"></i>
+                        </button>
+                        <button class="window-close-btn text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="app-window-body p-4 flex-grow overflow-auto">
+                    </div>
+            </div>
+        </template>
+
+        <div id="chrome-browser-window" class="app-window hidden" data-app-id="chrome-browser">
+            <div class="app-window-header">
+                <span class="app-window-title font-semibold text-gray-700">Navegador Chrome</span>
+                <div class="flex gap-2">
+                    <button class="window-minimize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="window-maximize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-square"></i>
+                    </button>
+                    <button class="window-close-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="app-window-body p-0 flex flex-col">
+                <div class="flex items-center p-2 bg-gray-100 border-b border-gray-200 rounded-t-lg">
+                    <input type="text" id="chrome-url-input" class="flex-grow p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Escribe una URL o busca...">
+                    <button id="chrome-go-btn" class="ml-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">Ir</button>
+                </div>
+                <iframe id="chrome-iframe" src="https://www.google.com" class="flex-grow" allowfullscreen></iframe>
+                <div id="chrome-message-area" class="p-2 text-sm text-gray-600 bg-gray-100 rounded-b-lg">
+                    <p>Introduce una URL para navegar. Ten en cuenta que muchos sitios web bloquean la incrustación por seguridad.</p>
+                    <button id="open-in-new-tab-btn" class="mt-2 px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-xs">Abrir en nueva pestaña</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="camera-app-window" class="app-window hidden" data-app-id="camera-app">
+            <div class="app-window-header">
+                <span class="app-window-title font-semibold text-gray-700">Cámara</span>
+                <div class="flex gap-2">
+                    <button class="window-minimize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="window-maximize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-square"></i>
+                    </button>
+                    <button class="window-close-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="app-window-body p-4 flex flex-col items-center justify-center">
+                <video id="camera-video" autoplay playsinline class="w-full h-auto max-h-full rounded-lg shadow-md"></video>
+                <button id="camera-capture-btn" class="mt-4 px-6 py-3 bg-green-500 text-white rounded-full shadow-lg hover:bg-green-600 transition-colors">
+                    <i class="fas fa-camera mr-2"></i>Capturar Foto
+                </button>
+                <canvas id="camera-canvas" class="hidden"></canvas>
+                <div id="captured-image-preview" class="mt-4 hidden max-w-full max-h-64 overflow-hidden rounded-lg shadow-md"></div>
+            </div>
+        </div>
+
+        <div id="notes-app-window" class="app-window hidden" data-app-id="notes-app">
+            <div class="app-window-header">
+                <span class="app-window-title font-semibold text-gray-700">Notas</span>
+                <div class="flex gap-2">
+                    <button class="window-minimize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="window-maximize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-square"></i>
+                    </button>
+                    <button class="window-close-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="app-window-body p-0 flex-grow">
+                <textarea id="notes-textarea" placeholder="Escribe tus notas aquí..." class="w-full h-full p-4 border-none outline-none rounded-b-lg"></textarea>
+            </div>
+        </div>
+
+        <div id="files-app-window" class="app-window hidden" data-app-id="files-app">
+            <div class="app-window-header">
+                <span class="app-window-title font-semibold text-gray-700">Archivos</span>
+                <div class="flex gap-2">
+                    <button class="window-minimize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="window-maximize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-square"></i>
+                    </button>
+                    <button class="window-close-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="app-window-body p-4">
+                <h3 class="text-lg font-semibold mb-4">Mis Archivos</h3>
+                <ul id="file-list" class="space-y-2">
+                    <li class="flex items-center text-gray-700">
+                        <i class="fas fa-folder mr-2 text-blue-500"></i>Documentos
+                    </li>
+                    <li class="flex items-center text-gray-700">
+                        <i class="fas fa-folder mr-2 text-blue-500"></i>Descargas
+                    </li>
+                    <li class="flex items-center text-gray-700">
+                        <i class="fas fa-image mr-2 text-purple-500"></i>Vacaciones.jpg
+                    </li>
+                    <li class="flex items-center text-gray-700">
+                        <i class="fas fa-file-alt mr-2 text-green-500"></i>Informe.docx
+                    </li>
+                    <li class="flex items-center text-gray-700">
+                        <i class="fas fa-file-pdf mr-2 text-red-500"></i>Manual.pdf
+                    </li>
+                </ul>
+                <div class="mt-4">
+                    <input type="file" id="file-upload-input" class="hidden">
+                    <button id="file-upload-btn" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                        <i class="fas fa-upload mr-2"></i>Subir archivo
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="gallery-app-window" class="app-window hidden" data-app-id="gallery-app">
+            <div class="app-window-header">
+                <span class="app-window-title font-semibold text-gray-700">Galería</span>
+                <div class="flex gap-2">
+                    <button class="window-minimize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="window-maximize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-square"></i>
+                    </button>
+                    <button class="window-close-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="app-window-body p-4 flex flex-col">
+                <h3 class="text-lg font-semibold mb-4">Tus Imágenes</h3>
+                <div id="gallery-grid" class="gallery-grid flex-grow">
+                    <img src="https://placehold.co/150x100/A7F3D0/065F46?text=Imagen+1" alt="Imagen 1" class="rounded-lg shadow-sm">
+                    <img src="https://placehold.co/150x100/BFDBFE/1E40AF?text=Imagen+2" alt="Imagen 2" class="rounded-lg shadow-sm">
+                    <img src="https://placehold.co/150x100/FEE2E2/991B1B?text=Imagen+3" alt="Imagen 3" class="rounded-lg shadow-sm">
+                    <img src="https://placehold.co/150x100/FFEDD5/9A3412?text=Imagen+4" alt="Imagen 4" class="rounded-lg shadow-sm">
+                </div>
+                <div class="mt-4">
+                    <input type="file" id="gallery-upload-input" accept="image/*" class="hidden">
+                    <button id="gallery-upload-btn" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                        <i class="fas fa-plus-circle mr-2"></i>Añadir Imagen
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="calculator-app-window" class="app-window hidden" data-app-id="calculator-app">
+            <div class="app-window-header">
+                <span class="app-window-title font-semibold text-gray-700">Calculadora</span>
+                <div class="flex gap-2">
+                    <button class="window-minimize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="window-maximize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-square"></i>
+                    </button>
+                    <button class="window-close-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="app-window-body p-4 flex items-center justify-center">
+                <div class="calculator-grid">
+                    <div class="calculator-display" id="calculator-display">0</div>
+                    <button class="calculator-button clear" data-action="clear">C</button>
+                    <button class="calculator-button operator" data-action="negate">+/-</button>
+                    <button class="calculator-button operator" data-action="percent">%</button>
+                    <button class="calculator-button operator" data-action="divide">÷</button>
+                    <button class="calculator-button" data-action="number">7</button>
+                    <button class="calculator-button" data-action="number">8</button>
+                    <button class="calculator-button" data-action="number">9</button>
+                    <button class="calculator-button operator" data-action="multiply">×</button>
+                    <button class="calculator-button" data-action="number">4</button>
+                    <button class="calculator-button" data-action="number">5</button>
+                    <button class="calculator-button" data-action="number">6</button>
+                    <button class="calculator-button operator" data-action="subtract">-</button>
+                    <button class="calculator-button" data-action="number">1</button>
+                    <button class="calculator-button" data-action="number">2</button>
+                    <button class="calculator-button" data-action="number">3</button>
+                    <button class="calculator-button operator" data-action="add">+</button>
+                    <button class="calculator-button" data-action="number" style="grid-column: span 2;">0</button>
+                    <button class="calculator-button" data-action="decimal">.</button>
+                    <button class="calculator-button equals" data-action="equals">=</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="calendar-app-window" class="app-window hidden" data-app-id="calendar-app">
+            <div class="app-window-header">
+                <span class="app-window-title font-semibold text-gray-700">Calendario</span>
+                <div class="flex gap-2">
+                    <button class="window-minimize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="window-maximize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-square"></i>
+                    </button>
+                    <button class="window-close-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="app-window-body p-4 flex flex-col items-center justify-center">
+                <div class="calendar-header">
+                    <button id="prev-month-btn" class="px-3 py-1 rounded-md hover:bg-gray-200"><i class="fas fa-chevron-left"></i></button>
+                    <span id="current-month-year"></span>
+                    <button id="next-month-btn" class="px-3 py-1 rounded-md hover:bg-gray-200"><i class="fas fa-chevron-right"></i></button>
+                </div>
+                <div class="calendar-grid-days">
+                    <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span>
+                </div>
+                <div id="calendar-dates-grid" class="calendar-grid-dates">
+                    </div>
+            </div>
+        </div>
+
+        <div id="settings-app-window" class="app-window hidden" data-app-id="settings-app">
+            <div class="app-window-header">
+                <span class="app-window-title font-semibold text-gray-700">Ajustes</span>
+                <div class="flex gap-2">
+                    <button class="window-minimize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button class="window-maximize-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-square"></i>
+                    </button>
+                    <button class="window-close-btn text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="app-window-body p-4">
+                <div class="settings-section">
+                    <h3>Fondo de Pantalla</h3>
+                    <div class="settings-item">
+                        <label for="desktop-background-upload">Fondo de Escritorio:</label>
+                        <input type="file" id="desktop-background-upload" accept="image/*">
+                        <label for="desktop-background-upload" class="custom-file-upload">
+                            <i class="fas fa-upload mr-2"></i>Subir Imagen
+                        </label>
+                        <span id="desktop-file-name" class="file-name">Ningún archivo seleccionado</span>
+                        <p id="desktop-bg-message" class="message"></p>
+                    </div>
+                    <div class="settings-item">
+                        <label for="lockscreen-background-upload">Fondo de Pantalla de Bloqueo:</label>
+                        <input type="file" id="lockscreen-background-upload" accept="image/*">
+                        <label for="lockscreen-background-upload" class="custom-file-upload">
+                            <i class="fas fa-upload mr-2"></i>Subir Imagen
+                        </label>
+                        <span id="lockscreen-file-name" class="file-name">Ningún archivo seleccionado</span>
+                        <p id="lockscreen-bg-message" class="message"></p>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Seguridad y PIN</h3>
+                    <div class="settings-item">
+                        <label for="old-pin-input">PIN Actual:</label>
+                        <input type="password" id="old-pin-input" maxlength="4" placeholder="Introduce tu PIN actual">
+                    </div>
+                    <div class="settings-item">
+                        <label for="new-pin-input">Nuevo PIN:</label>
+                        <input type="password" id="new-pin-input" maxlength="4" placeholder="Introduce el nuevo PIN">
+                    </div>
+                    <div class="settings-item">
+                        <label for="confirm-new-pin-input">Confirmar Nuevo PIN:</label>
+                        <input type="password" id="confirm-new-pin-input" maxlength="4" placeholder="Confirma el nuevo PIN">
+                    </div>
+                    <button id="change-pin-btn">Cambiar PIN</button>
+                    <p id="pin-change-message" class="message"></p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="annotation-overlay" class="annotation-overlay hidden">
+        <canvas id="annotation-canvas" class="w-full h-full"></canvas>
+    </div>
+
+    <div id="annotation-tools" class="annotation-tools hidden">
+        <input type="color" id="annotation-color" value="#FF0000">
+        <input type="range" id="annotation-thickness" min="1" max="20" value="5">
+        <button id="annotation-clear"><i class="fas fa-eraser"></i> Limpiar</button>
+        <button id="annotation-done"><i class="fas fa-check"></i> Hecho</button>
+    </div>
+
+    <div class="shelf">
+        <div id="launcher-icon" class="app-icon">
+            <i class="fas fa-th-large text-blue-600"></i>
+            <span>Lanzador</span>
+        </div>
+        <div id="chrome-browser-icon" class="app-icon" data-app-id="chrome-browser">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Chrome_icon_%28September_2014%29.svg" alt="Chrome">
+            <span>Chrome</span>
+        </div>
+        <div id="camera-app-icon" class="app-icon" data-app-id="camera-app">
+            <i class="fas fa-camera text-gray-700"></i>
+            <span>Cámara</span>
+        </div>
+        <div id="notes-app-icon" class="app-icon" data-app-id="notes-app">
+            <i class="fas fa-sticky-note text-yellow-500"></i>
+            <span>Notas</span>
+        </div>
+        <div id="files-app-icon" class="app-icon" data-app-id="files-app">
+            <i class="fas fa-folder text-blue-500"></i>
+            <span>Archivos</span>
+        </div>
+        <div id="gallery-app-icon" class="app-icon" data-app-id="gallery-app">
+            <i class="fas fa-images text-purple-500"></i>
+            <span>Galería</span>
+        </div>
+        <div id="calculator-app-icon" class="app-icon" data-app-id="calculator-app">
+            <i class="fas fa-calculator text-gray-600"></i>
+            <span>Calculadora</span>
+        </div>
+        <div id="calendar-app-icon" class="app-icon" data-app-id="calendar-app">
+            <i class="fas fa-calendar-alt text-red-500"></i>
+            <span>Calendario</span>
+        </div>
+        <div id="settings-app-icon" class="app-icon" data-app-id="settings-app">
+            <i class="fas fa-cog text-gray-600"></i>
+            <span>Ajustes</span>
+        </div>
+        <div id="lock-screen-icon" class="app-icon">
+            <i class="fas fa-lock text-red-500"></i>
+            <span>Bloquear</span>
+        </div>
+    </div>
+
+    <div id="app-launcher" class="app-launcher">
+        </div>
+
+    <div id="message-modal" class="modal">
+        <div class="modal-content">
+            <p id="modal-message" class="text-lg mb-4"></p>
+            <button id="modal-close-btn" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">Cerrar</button>
+        </div>
+    </div>
+
+    <div id="lock-screen" class="active">
+        <div class="lock-content">
+            <h2 class="text-3xl font-bold mb-4">ChromeOS Flex</h2>
+            <p class="text-xl">Introduce tu PIN para desbloquear</p>
+            <input type="password" id="pin-input" placeholder="PIN" maxlength="4" class="block mx-auto">
+            <p id="lock-error-message" class="error-message hidden"></p>
+            <button id="unlock-btn">Desbloquear</button>
+        </div>
+    </div>
+
+    <script>
+        // Utility function to show a custom modal message
+        function showMessage(message) {
+            const modal = document.getElementById('message-modal');
+            const modalMessage = document.getElementById('modal-message');
+            modalMessage.textContent = message;
+            modal.classList.add('active');
+        }
+
+        document.getElementById('modal-close-btn').addEventListener('click', () => {
+            document.getElementById('message-modal').classList.remove('active');
+        });
+
+        // --- App Management ---
+        const appWindowsContainer = document.getElementById('app-windows-container');
+        const appLauncher = document.getElementById('app-launcher');
+        const launcherIcon = document.getElementById('launcher-icon');
+        const lockScreenIcon = document.getElementById('lock-screen-icon');
+
+        let activeWindow = null; // Track the currently active window for z-index
+        let isSystemLocked = true; // State variable for lock screen
+
+        // Map of app IDs to their window elements
+        const appWindowElements = {
+            'chrome-browser': document.getElementById('chrome-browser-window'),
+            'camera-app': document.getElementById('camera-app-window'),
+            'notes-app': document.getElementById('notes-app-window'),
+            'files-app': document.getElementById('files-app-window'),
+            'gallery-app': document.getElementById('gallery-app-window'),
+            'calculator-app': document.getElementById('calculator-app-window'),
+            'calendar-app': document.getElementById('calendar-app-window'),
+            'settings-app': document.getElementById('settings-app-window'),
+            // 'annotation-app' is special, handled separately
+        };
+
+        // Populate app launcher dynamically (can be extended)
+        const allApps = [
+            { id: 'chrome-browser', name: 'Chrome', icon: '<img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Chrome_icon_%28September_2014%29.svg" alt="Chrome">' },
+            { id: 'camera-app', name: 'Cámara', icon: '<i class="fas fa-camera text-gray-700"></i>' },
+            { id: 'notes-app', name: 'Notas', icon: '<i class="fas fa-sticky-note text-yellow-500"></i>' },
+            { id: 'files-app', name: 'Archivos', icon: '<i class="fas fa-folder text-blue-500"></i>' },
+            { id: 'gallery-app', name: 'Galería', icon: '<i class="fas fa-images text-purple-500"></i>' },
+            { id: 'calculator-app', name: 'Calculadora', icon: '<i class="fas fa-calculator text-gray-600"></i>' },
+            { id: 'calendar-app', name: 'Calendario', icon: '<i class="fas fa-calendar-alt text-red-500"></i>' },
+            { id: 'settings-app', name: 'Ajustes', icon: '<i class="fas fa-cog text-gray-600"></i>' },
+            { id: 'annotation-app', name: 'Anotar', icon: '<i class="fas fa-highlighter text-green-500"></i>' },
+            { id: 'terminal-app', name: 'Terminal', icon: '<i class="fas fa-terminal text-green-700"></i>' },
+        ];
+
+        allApps.forEach(app => {
+            const appIconDiv = document.createElement('div');
+            appIconDiv.className = 'app-icon';
+            appIconDiv.setAttribute('data-app-id', app.id);
+            appIconDiv.innerHTML = `${app.icon}<span>${app.name}</span>`;
+            appLauncher.appendChild(appIconDiv);
+        });
+
+        // Re-select all app icons after dynamic addition
+        const allAppIcons = document.querySelectorAll('.app-icon[data-app-id]');
+
+        allAppIcons.forEach(icon => {
+            icon.addEventListener('click', () => {
+                // Prevent opening apps if locked
+                if (isSystemLocked) {
+                    showMessage("El sistema está bloqueado. Por favor, desbloquéalo primero.");
+                    return;
+                }
+
+                const appId = icon.dataset.appId;
+                if (appId === 'annotation-app') {
+                    toggleAnnotationMode();
+                } else {
+                    openApp(appId);
+                }
+                appLauncher.classList.remove('active'); // Close launcher after opening app
+            });
+        });
+
+        launcherIcon.addEventListener('click', () => {
+            if (isSystemLocked) {
+                showMessage("El sistema está bloqueado. Por favor, desbloquéalo primero.");
+                return;
+            }
+            appLauncher.classList.toggle('active');
+        });
+
+        // Close launcher if clicked outside
+        document.addEventListener('click', (event) => {
+            if (!isSystemLocked && !appLauncher.contains(event.target) && !launcherIcon.contains(event.target) && appLauncher.classList.contains('active')) {
+                appLauncher.classList.remove('active');
+            }
+        });
+
+        function openApp(appId) {
+            const appWindow = appWindowElements[appId];
+            if (appWindow) {
+                // Deactivate current active window if any
+                if (activeWindow) {
+                    activeWindow.classList.remove('active');
+                }
+
+                appWindow.classList.remove('hidden');
+                // Set initial position if it's the first time opening or if it's minimized
+                if (!appWindow.style.top || appWindow.dataset.minimized === 'true') {
+                    appWindow.style.top = '50%';
+                    appWindow.style.left = '50%';
+                    appWindow.style.transform = 'translate(-50%, -50%)';
+                    appWindow.style.width = '70%'; // Default width
+                    appWindow.style.height = '70%'; // Default height
+                    appWindow.dataset.minimized = 'false';
+                    appWindow.dataset.maximized = 'false';
+                }
+                appWindow.classList.add('active'); // Activate the window
+                activeWindow = appWindow; // Set as active window
+                bringWindowToFront(appWindow); // Bring to front
+
+                // Specific app initialization
+                if (appId === 'camera-app') {
+                    startCamera();
+                } else if (appId === 'calendar-app') {
+                    renderCalendar(new Date()); // Render current month when calendar opens
+                }
+            } else {
+                showMessage(`La aplicación "${appId}" no está implementada completamente aún.`);
+            }
+        }
+
+        function closeApp(appId) {
+            const appWindow = appWindowElements[appId];
+            if (appWindow) {
+                appWindow.classList.remove('active');
+                appWindow.classList.add('hidden');
+                if (appId === 'camera-app') {
+                    stopCamera();
+                }
+                if (activeWindow === appWindow) {
+                    activeWindow = null; // Clear active window if closing it
+                }
+            }
+        }
+
+        function minimizeApp(appWindow) {
+            appWindow.classList.remove('active');
+            appWindow.classList.add('hidden'); // Hide it for now, could be a better minimize animation
+            appWindow.dataset.minimized = 'true';
+            if (activeWindow === appWindow) {
+                activeWindow = null;
+            }
+        }
+
+        let originalWindowSize = {}; // Store original size for maximize/restore
+
+        function maximizeApp(appWindow) {
+            if (appWindow.dataset.maximized === 'true') {
+                // Restore
+                appWindow.style.top = originalWindowSize.top;
+                appWindow.style.left = originalWindowSize.left;
+                appWindow.style.width = originalWindowSize.width;
+                appWindow.style.height = originalWindowSize.height;
+                appWindow.style.transform = originalWindowSize.transform;
+                appWindow.dataset.maximized = 'false';
+            } else {
+                // Maximize
+                originalWindowSize = {
+                    top: appWindow.style.top,
+                    left: appWindow.style.left,
+                    width: appWindow.style.width,
+                    height: appWindow.style.height,
+                    transform: appWindow.style.transform
+                };
+                appWindow.style.top = '0';
+                appWindow.style.left = '0';
+                appWindow.style.width = '100vw';
+                appWindow.style.height = 'calc(100vh - 80px)'; // Account for shelf height
+                appWindow.style.transform = 'none';
+                appWindow.dataset.maximized = 'true';
+            }
+        }
+
+
+        // --- Window Dragging and Z-index ---
+        let highestZIndex = 101; // Start with 101 as default for active window
+
+        function bringWindowToFront(windowElement) {
+            highestZIndex++;
+            windowElement.style.zIndex = highestZIndex;
+        }
+
+        appWindowsContainer.addEventListener('mousedown', (event) => {
+            // Prevent dragging if locked
+            if (isSystemLocked) return;
+
+            const targetWindow = event.target.closest('.app-window');
+            if (targetWindow && targetWindow !== activeWindow) {
+                // Deactivate previous active window
+                if (activeWindow) {
+                    activeWindow.classList.remove('active');
+                }
+                // Activate new window
+                targetWindow.classList.add('active');
+                activeWindow = targetWindow;
+                bringWindowToFront(targetWindow);
+            }
+        });
+
+        document.querySelectorAll('.app-window-header').forEach(header => {
+            let isDragging = false;
+            let offsetX, offsetY;
+            const appWindow = header.closest('.app-window');
+
+            header.addEventListener('mousedown', (e) => {
+                // Prevent dragging if locked
+                if (isSystemLocked) return;
+
+                isDragging = true;
+                offsetX = e.clientX - appWindow.getBoundingClientRect().left;
+                offsetY = e.clientY - appWindow.getBoundingClientRect().top;
+                appWindow.style.cursor = 'grabbing';
+                bringWindowToFront(appWindow); // Bring to front on drag start
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                appWindow.style.left = `${e.clientX - offsetX}px`;
+                appWindow.style.top = `${e.clientY - offsetY}px`;
+                appWindow.style.transform = 'none'; // Remove transform when dragging
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                appWindow.style.cursor = 'grab';
+            });
+        });
+
+        // --- Window Controls (Minimize, Maximize, Close) ---
+        document.querySelectorAll('.window-close-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                // Prevent closing if locked
+                if (isSystemLocked) return;
+                const appWindow = e.target.closest('.app-window');
+                closeApp(appWindow.dataset.appId);
+            });
+        });
+
+        document.querySelectorAll('.window-minimize-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                // Prevent minimizing if locked
+                if (isSystemLocked) return;
+                const appWindow = e.target.closest('.app-window');
+                minimizeApp(appWindow);
+            });
+        });
+
+        document.querySelectorAll('.window-maximize-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                // Prevent maximizing if locked
+                if (isSystemLocked) return;
+                const appWindow = e.target.closest('.app-window');
+                maximizeApp(appWindow);
+            });
+        });
+
+        // --- Chrome Browser App Logic ---
+        const chromeUrlInput = document.getElementById('chrome-url-input');
+        const chromeGoBtn = document.getElementById('chrome-go-btn');
+        const chromeIframe = document.getElementById('chrome-iframe');
+        const chromeMessageArea = document.getElementById('chrome-message-area'); // Element for messages
+
+        function loadUrl() {
+            let url = chromeUrlInput.value;
+            // Prepend https:// if no protocol is specified
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                // Simple heuristic: if it contains a dot, treat as a domain, otherwise as a search query
+                if (url.includes('.')) {
+                    url = 'https://' + url;
+                } else {
+                    url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
+                }
+            }
+            chromeIframe.src = url;
+            // Reset message area when a new URL is loaded
+            chromeMessageArea.innerHTML = `
+                <p>Introduce una URL para navegar. Ten en cuenta que muchos sitios web bloquean la incrustación por seguridad.</p>
+                <button id="open-in-new-tab-btn" class="mt-2 px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-xs">Abrir en nueva pestaña</button>
+            `;
+            // Re-attach event listener for the "Open in new tab" button
+            document.getElementById('open-in-new-tab-btn').addEventListener('click', () => {
+                window.open(chromeUrlInput.value, '_blank');
+            });
+        }
+
+        // Event listener for iframe load errors or security blocks
+        chromeIframe.addEventListener('load', () => {
+            // Este evento se dispara incluso si la carga falla debido a restricciones de seguridad.
+            // Intentamos detectar si el contenido se cargó realmente intentando acceder a su documento.
+            try {
+                // Acceder a contentWindow.document lanzará un SecurityError si X-Frame-Options o CORS lo bloquean.
+                const iframeDoc = chromeIframe.contentWindow.document;
+                // Si no hay error, el contenido probablemente se cargó correctamente
+                // Podemos limpiar el área de mensajes ya que el contenido es visible.
+                chromeMessageArea.innerHTML = `
+                    <p>Navegando a: <span class="font-semibold">${chromeIframe.src}</span></p>
+                    <button id="open-in-new-tab-btn" class="mt-2 px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-xs">Abrir en nueva pestaña</button>
+                `;
+                 document.getElementById('open-in-new-tab-btn').addEventListener('click', () => {
+                    window.open(chromeUrlInput.value, '_blank');
+                });
+            } catch (e) {
+                // Este bloque catch significa que el acceso fue denegado, probablemente debido a X-Frame-Options u otras políticas de seguridad.
+                console.error("Error de seguridad al cargar la página en el iframe:", e);
+                chromeMessageArea.innerHTML = `
+                    <p class="text-red-600 font-semibold">
+                        ¡Error de seguridad! Este sitio web no permite ser incrustado aquí.
+                    </p>
+                    <p class="mt-1">
+                        Esto se debe a políticas de seguridad del navegador (como X-Frame-Options o CORS) que protegen tu privacidad.
+                        No es posible "saltarse" estas restricciones desde el simulador.
+                    </p>
+                    <button id="open-in-new-tab-btn" class="mt-2 px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-xs">
+                        Abrir en nueva pestaña
+                    </button>
+                `;
+                // Volver a adjuntar el listener de eventos para el nuevo botón si fue recreado
+                document.getElementById('open-in-new-tab-btn').addEventListener('click', () => {
+                    window.open(chromeUrlInput.value, '_blank');
+                });
+            }
+        });
+
+        chromeGoBtn.addEventListener('click', loadUrl);
+        chromeUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loadUrl();
+            }
+        });
+
+        // --- Camera App Logic ---
+        const cameraVideo = document.getElementById('camera-video');
+        const cameraCaptureBtn = document.getElementById('camera-capture-btn');
+        const cameraCanvas = document.getElementById('camera-canvas');
+        const capturedImagePreview = document.getElementById('captured-image-preview');
+        let mediaStream = null;
+
+        async function startCamera() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                cameraVideo.srcObject = mediaStream;
+                cameraVideo.play();
+                cameraCaptureBtn.classList.remove('hidden');
+                capturedImagePreview.classList.add('hidden'); // Hide previous capture
+                capturedImagePreview.innerHTML = '';
+            } catch (err) {
+                console.error("Error al acceder a la cámara:", err);
+                showMessage("No se pudo acceder a la cámara. Asegúrate de haber dado permiso.");
+                cameraCaptureBtn.classList.add('hidden');
+            }
+        }
+
+        function stopCamera() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+                cameraVideo.srcObject = null;
+            }
+        }
+
+        cameraCaptureBtn.addEventListener('click', () => {
+            if (mediaStream) {
+                const context = cameraCanvas.getContext('2d');
+                cameraCanvas.width = cameraVideo.videoWidth;
+                cameraCanvas.height = cameraVideo.videoHeight;
+                context.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
+                const imageDataUrl = cameraCanvas.toDataURL('image/png');
+
+                capturedImagePreview.innerHTML = `<img src="${imageDataUrl}" class="w-full h-full object-contain rounded-lg">`;
+                capturedImagePreview.classList.remove('hidden');
+                showMessage("Foto capturada y guardada en la galería (simulado).");
+                // In a real app, you'd save this imageDataUrl to a storage.
+            } else {
+                showMessage("La cámara no está activa.");
+            }
+        });
+
+        // --- Files App Logic ---
+        const fileUploadInput = document.getElementById('file-upload-input');
+        const fileUploadBtn = document.getElementById('file-upload-btn');
+        const fileList = document.getElementById('file-list');
+
+        fileUploadBtn.addEventListener('click', () => {
+            fileUploadInput.click();
+        });
+
+        fileUploadInput.addEventListener('change', (event) => {
+            const files = event.target.files;
+            if (files.length > 0) {
+                const file = files[0];
+                const listItem = document.createElement('li');
+                let iconClass = 'fas fa-file mr-2'; // Default icon
+                if (file.type.startsWith('image/')) {
+                    iconClass = 'fas fa-image mr-2 text-purple-500';
+                } else if (file.type === 'application/pdf') {
+                    iconClass = 'fas fa-file-pdf mr-2 text-red-500';
+                } else if (file.type.includes('document') || file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+                    iconClass = 'fas fa-file-alt mr-2 text-green-500';
+                }
+                listItem.className = 'flex items-center text-gray-700';
+                listItem.innerHTML = `<i class="${iconClass}"></i>${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+                fileList.appendChild(listItem);
+                showMessage(`Archivo "${file.name}" subido (simulado).`);
+            }
+        });
+
+        // --- Gallery App Logic ---
+        const galleryUploadInput = document.getElementById('gallery-upload-input');
+        const galleryUploadBtn = document.getElementById('gallery-upload-btn');
+        const galleryGrid = document.getElementById('gallery-grid');
+
+        galleryUploadBtn.addEventListener('click', () => {
+            galleryUploadInput.click();
+        });
+
+        galleryUploadInput.addEventListener('change', (event) => {
+            const files = event.target.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.alt = file.name;
+                        img.className = 'rounded-lg shadow-sm';
+                        galleryGrid.appendChild(img);
+                        showMessage(`Imagen "${file.name}" añadida a la galería.`);
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    showMessage("Por favor, selecciona un archivo de imagen.");
+                }
+            }
+        });
+
+        // --- Screen Annotation Logic ---
+        const annotationOverlay = document.getElementById('annotation-overlay');
+        const annotationCanvas = document.getElementById('annotation-canvas');
+        const annotationTools = document.getElementById('annotation-tools');
+        const annotationColor = document.getElementById('annotation-color');
+        const annotationThickness = document.getElementById('annotation-thickness');
+        const annotationClearBtn = document.getElementById('annotation-clear');
+        const annotationDoneBtn = document.getElementById('annotation-done');
+
+        let isAnnotating = false;
+        let ctx = annotationCanvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        function setupCanvas() {
+            annotationCanvas.width = window.innerWidth;
+            annotationCanvas.height = window.innerHeight;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+        }
+
+        window.addEventListener('resize', setupCanvas); // Recalibrate canvas on resize
+
+        function toggleAnnotationMode() {
+            if (isSystemLocked) {
+                showMessage("El sistema está bloqueado. Por favor, desbloquéalo primero.");
+                return;
+            }
+
+            isAnnotating = !isAnnotating;
+            if (isAnnotating) {
+                annotationOverlay.classList.remove('hidden');
+                annotationOverlay.classList.add('active');
+                annotationTools.classList.remove('hidden');
+                setupCanvas(); // Initialize canvas size
+                showMessage("Modo de anotación activado. ¡Puedes dibujar en la pantalla!");
+            } else {
+                annotationOverlay.classList.add('hidden');
+                annotationOverlay.classList.remove('active');
+                annotationTools.classList.add('hidden');
+                // Clear canvas when done
+                ctx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+                showMessage("Modo de anotación desactivado.");
+            }
+        }
+
+        annotationCanvas.addEventListener('mousedown', (e) => {
+            if (isSystemLocked) return;
+            isDrawing = true;
+            [lastX, lastY] = [e.clientX, e.clientY];
+        });
+
+        annotationCanvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing || isSystemLocked) return;
+            ctx.strokeStyle = annotationColor.value;
+            ctx.lineWidth = annotationThickness.value;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.clientX, e.clientY);
+            ctx.stroke();
+            [lastX, lastY] = [e.clientX, e.clientY];
+        });
+
+        annotationCanvas.addEventListener('mouseup', () => isDrawing = false);
+        annotationCanvas.addEventListener('mouseout', () => isDrawing = false);
+
+        // Touch events for annotation
+        annotationCanvas.addEventListener('touchstart', (e) => {
+            if (isSystemLocked) return;
+            isDrawing = true;
+            const touch = e.touches[0];
+            [lastX, lastY] = [touch.clientX, touch.clientY];
+            e.preventDefault(); // Prevent scrolling
+        });
+
+        annotationCanvas.addEventListener('touchmove', (e) => {
+            if (!isDrawing || isSystemLocked) return;
+            const touch = e.touches[0];
+            ctx.strokeStyle = annotationColor.value;
+            ctx.lineWidth = annotationThickness.value;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(touch.clientX, touch.clientY);
+            ctx.stroke();
+            [lastX, lastY] = [touch.clientX, touch.clientY];
+            e.preventDefault(); // Prevent scrolling
+        });
+
+        annotationCanvas.addEventListener('touchend', () => isDrawing = false);
+        annotationCanvas.addEventListener('touchcancel', () => isDrawing = false);
+
+
+        annotationClearBtn.addEventListener('click', () => {
+            if (isSystemLocked) return;
+            ctx.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
+        });
+
+        annotationDoneBtn.addEventListener('click', toggleAnnotationMode);
+
+        // --- Lock Screen Logic ---
+        const lockScreen = document.getElementById('lock-screen');
+        const pinInput = document.getElementById('pin-input');
+        const unlockBtn = document.getElementById('unlock-btn');
+        const lockErrorMessage = document.getElementById('lock-error-message');
+
+        const CORRECT_PIN_KEY = 'chromeos_pin';
+        const DESKTOP_BG_KEY = 'chromeos_desktop_bg';
+        const LOCKSCREEN_BG_KEY = 'chromeos_lockscreen_bg';
+
+        let currentPin = '';
+
+        function loadPin() {
+            const storedPin = localStorage.getItem(CORRECT_PIN_KEY);
+            if (storedPin) {
+                currentPin = storedPin;
+            } else {
+                currentPin = '1234'; // Default PIN if none is stored
+                localStorage.setItem(CORRECT_PIN_KEY, currentPin);
+            }
+            console.log("PIN cargado:", currentPin); // For debugging
+        }
+
+        function savePin(pin) {
+            localStorage.setItem(CORRECT_PIN_KEY, pin);
+            currentPin = pin;
+            console.log("PIN guardado:", currentPin); // For debugging
+        }
+
+        function showLockScreen() {
+            isSystemLocked = true;
+            lockScreen.classList.add('active');
+            pinInput.value = ''; // Clear input field
+            lockErrorMessage.classList.add('hidden');
+            pinInput.focus();
+
+            // Hide all app windows and launcher when locked
+            Object.values(appWindowElements).forEach(window => {
+                window.classList.remove('active');
+                window.classList.add('hidden');
+            });
+            appLauncher.classList.remove('active');
+            // Stop camera if active
+            stopCamera();
+        }
+
+        function hideLockScreen() {
+            isSystemLocked = false;
+            lockScreen.classList.remove('active');
+            lockErrorMessage.classList.add('hidden');
+        }
+
+        unlockBtn.addEventListener('click', () => {
+            const enteredPin = pinInput.value;
+            if (enteredPin === currentPin) {
+                hideLockScreen();
+            } else {
+                lockErrorMessage.textContent = "PIN incorrecto. Inténtalo de nuevo.";
+                lockErrorMessage.classList.remove('hidden');
+                pinInput.value = '';
+            }
+        });
+
+        pinInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                unlockBtn.click();
+            }
+        });
+
+        lockScreenIcon.addEventListener('click', showLockScreen);
+
+        // --- Calculator App Logic ---
+        const calculatorDisplay = document.getElementById('calculator-display');
+        const calculatorButtons = document.querySelectorAll('#calculator-app-window .calculator-button');
+
+        let currentInput = '0';
+        let previousInput = '';
+        let operator = null;
+        let resetDisplay = false;
+
+        function updateDisplay() {
+            calculatorDisplay.textContent = currentInput;
+        }
+
+        function clearCalculator() {
+            currentInput = '0';
+            previousInput = '';
+            operator = null;
+            resetDisplay = false;
+            updateDisplay();
+        }
+
+        function appendNumber(number) {
+            if (resetDisplay) {
+                currentInput = number;
+                resetDisplay = false;
+            } else {
+                if (currentInput === '0' && number !== '.') {
+                    currentInput = number;
+                } else {
+                    currentInput += number;
+                }
+            }
+            updateDisplay();
+        }
+
+        function chooseOperator(nextOperator) {
+            if (currentInput === '') return;
+            if (previousInput !== '') {
+                calculate();
+            }
+            operator = nextOperator;
+            previousInput = currentInput;
+            resetDisplay = true;
+        }
+
+        function calculate() {
+            let result;
+            const prev = parseFloat(previousInput);
+            const current = parseFloat(currentInput);
+
+            if (isNaN(prev) || isNaN(current)) return;
+
+            switch (operator) {
+                case 'add':
+                    result = prev + current;
+                    break;
+                case 'subtract':
+                    result = prev - current;
+                    break;
+                case 'multiply':
+                    result = prev * current;
+                    break;
+                case 'divide':
+                    if (current === 0) {
+                        showMessage("¡No se puede dividir por cero!");
+                        clearCalculator();
+                        return;
+                    }
+                    result = prev / current;
+                    break;
+                case 'percent':
+                    result = prev * (current / 100);
+                    break;
+                case 'negate':
+                    result = -current; // Negate only the current input
+                    break;
+                default:
+                    return;
+            }
+            currentInput = result.toString();
+            operator = null;
+            previousInput = '';
+            resetDisplay = true;
+            updateDisplay();
+        }
+
+        calculatorButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const action = button.dataset.action;
+                const buttonText = button.textContent;
+
+                if (action === 'clear') {
+                    clearCalculator();
+                } else if (action === 'number' || action === 'decimal') {
+                    appendNumber(buttonText);
+                } else if (action === 'equals') {
+                    calculate();
+                } else if (action === 'negate') {
+                    currentInput = (parseFloat(currentInput) * -1).toString();
+                    updateDisplay();
+                } else if (action === 'percent') {
+                    currentInput = (parseFloat(currentInput) / 100).toString();
+                    updateDisplay();
+                }
+                else if (action === 'add' || action === 'subtract' || action === 'multiply' || action === 'divide') {
+                    chooseOperator(action);
+                }
+            });
+        });
+
+        // --- Calendar App Logic ---
+        const currentMonthYearSpan = document.getElementById('current-month-year');
+        const calendarDatesGrid = document.getElementById('calendar-dates-grid');
+        const prevMonthBtn = document.getElementById('prev-month-btn');
+        const nextMonthBtn = document.getElementById('next-month-btn');
+
+        let currentDate = new Date(); // Tracks the currently displayed month
+
+        function renderCalendar(date) {
+            currentDate = new Date(date.getFullYear(), date.getMonth()); // Set to first day of the month
+
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth(); // 0-indexed
+
+            // Set month and year display
+            const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+            currentMonthYearSpan.textContent = `${monthNames[month]} ${year}`;
+
+            // Clear previous dates
+            calendarDatesGrid.innerHTML = '';
+
+            // Get the first day of the month (0 = Sunday, 6 = Saturday)
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            // Get the number of days in the current month
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            // Get the number of days in the previous month for padding
+            const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+            // Add leading empty cells for days from previous month
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const dateCell = document.createElement('div');
+                dateCell.classList.add('calendar-date', 'other-month');
+                dateCell.textContent = daysInPrevMonth - firstDayOfMonth + 1 + i;
+                calendarDatesGrid.appendChild(dateCell);
+            }
+
+            // Add days of the current month
+            const today = new Date();
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dateCell = document.createElement('div');
+                dateCell.classList.add('calendar-date', 'current-month');
+                dateCell.textContent = i;
+
+                // Highlight today's date
+                if (i === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
+                    dateCell.classList.add('today');
+                }
+                calendarDatesGrid.appendChild(dateCell);
+            }
+
+            // Add trailing empty cells for days from next month
+            const totalCells = firstDayOfMonth + daysInMonth;
+            const remainingCells = 42 - totalCells; // Ensure 6 rows (6 * 7 = 42 cells)
+            for (let i = 1; i <= (remainingCells % 7 === 0 ? remainingCells : 7 - (totalCells % 7)); i++) {
+                const dateCell = document.createElement('div');
+                dateCell.classList.add('calendar-date', 'other-month');
+                dateCell.textContent = i;
+                calendarDatesGrid.appendChild(dateCell);
+            }
+        }
+
+        prevMonthBtn.addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            renderCalendar(currentDate);
+        });
+
+        nextMonthBtn.addEventListener('click', () => {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            renderCalendar(currentDate);
+        });
+
+
+        // --- Settings App Logic ---
+        const desktopBackgroundUpload = document.getElementById('desktop-background-upload');
+        const lockscreenBackgroundUpload = document.getElementById('lockscreen-background-upload');
+        const desktopFileNameSpan = document.getElementById('desktop-file-name');
+        const lockscreenFileNameSpan = document.getElementById('lockscreen-file-name');
+        const desktopBgMessage = document.getElementById('desktop-bg-message');
+        const lockscreenBgMessage = document.getElementById('lockscreen-bg-message');
+
+        const oldPinInput = document.getElementById('old-pin-input');
+        const newPinInput = document.getElementById('new-pin-input');
+        const confirmNewPinInput = document.getElementById('confirm-new-pin-input');
+        const changePinBtn = document.getElementById('change-pin-btn');
+        const pinChangeMessage = document.getElementById('pin-change-message');
+
+        function applyBackground(targetElement, imageUrl) {
+            if (imageUrl) {
+                targetElement.style.backgroundImage = `url('${imageUrl}')`;
+            } else {
+                // Set default placeholder if no image is stored
+                if (targetElement.id === 'lock-screen') {
+                    targetElement.style.backgroundImage = `url('https://placehold.co/1920x1080/000000/FFFFFF?text=Locked+Screen+Background')`;
+                } else if (targetElement.classList.contains('desktop-bg')) {
+                    targetElement.style.backgroundImage = `url('https://placehold.co/1920x1080/000000/FFFFFF?text=ChromeOS+Flex+Background')`;
+                }
+            }
+        }
+
+        function loadBackgrounds() {
+            const desktopBg = localStorage.getItem(DESKTOP_BG_KEY);
+            const lockscreenBg = localStorage.getItem(LOCKSCREEN_BG_KEY);
+
+            applyBackground(document.querySelector('.desktop-bg'), desktopBg);
+            applyBackground(document.getElementById('lock-screen'), lockscreenBg);
+
+            // Update file names in settings if backgrounds are set
+            if (desktopBg) {
+                desktopFileNameSpan.textContent = 'Imagen personalizada cargada';
+            }
+            if (lockscreenBg) {
+                lockscreenFileNameSpan.textContent = 'Imagen personalizada cargada';
+            }
+        }
+
+        function handleBackgroundUpload(event, key, fileNameSpan, messageElement, targetElement) {
+            const file = event.target.files[0];
+            if (!file) {
+                fileNameSpan.textContent = 'Ningún archivo seleccionado';
+                messageElement.textContent = '';
+                return;
+            }
+
+            fileNameSpan.textContent = file.name;
+
+            if (!file.type.startsWith('image/')) {
+                messageElement.textContent = 'Por favor, selecciona un archivo de imagen.';
+                messageElement.classList.remove('success');
+                messageElement.classList.add('error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imageUrl = e.target.result;
+                localStorage.setItem(key, imageUrl);
+                applyBackground(targetElement, imageUrl);
+                messageElement.textContent = 'Fondo de pantalla actualizado con éxito.';
+                messageElement.classList.remove('error');
+                messageElement.classList.add('success');
+            };
+            reader.onerror = () => {
+                messageElement.textContent = 'Error al cargar la imagen.';
+                messageElement.classList.remove('success');
+                messageElement.classList.add('error');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        desktopBackgroundUpload.addEventListener('change', (event) => {
+            handleBackgroundUpload(event, DESKTOP_BG_KEY, desktopFileNameSpan, desktopBgMessage, document.querySelector('.desktop-bg'));
+        });
+
+        lockscreenBackgroundUpload.addEventListener('change', (event) => {
+            handleBackgroundUpload(event, LOCKSCREEN_BG_KEY, lockscreenFileNameSpan, lockscreenBgMessage, document.getElementById('lock-screen'));
+        });
+
+        changePinBtn.addEventListener('click', () => {
+            const oldPin = oldPinInput.value;
+            const newPin = newPinInput.value;
+            const confirmNewPin = confirmNewPinInput.value;
+
+            if (oldPin !== currentPin) {
+                pinChangeMessage.textContent = 'El PIN actual es incorrecto.';
+                pinChangeMessage.classList.remove('success');
+                pinChangeMessage.classList.add('error');
+                return;
+            }
+
+            if (newPin.length !== 4 || !/^\d+$/.test(newPin)) {
+                pinChangeMessage.textContent = 'El nuevo PIN debe ser de 4 dígitos numéricos.';
+                pinChangeMessage.classList.remove('success');
+                pinChangeMessage.classList.add('error');
+                return;
+            }
+
+            if (newPin !== confirmNewPin) {
+                pinChangeMessage.textContent = 'El nuevo PIN y la confirmación no coinciden.';
+                pinChangeMessage.classList.remove('success');
+                pinChangeMessage.classList.add('error');
+                return;
+            }
+
+            savePin(newPin);
+            pinChangeMessage.textContent = 'PIN cambiado con éxito.';
+            pinChangeMessage.classList.remove('error');
+            pinChangeMessage.classList.add('success');
+
+            // Clear inputs after successful change
+            oldPinInput.value = '';
+            newPinInput.value = '';
+            confirmNewPinInput.value = '';
+        });
+
+
+        // Initial setup for annotation canvas size and load PIN and backgrounds
+        window.onload = function() {
+            setupCanvas();
+            loadPin();
+            loadBackgrounds();
+            showLockScreen(); // Show lock screen on initial load
+        };
+
+    </script>
+</body>
+</html>
